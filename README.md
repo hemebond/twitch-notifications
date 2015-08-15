@@ -1,2 +1,2 @@
-# twitch-notifications
-Send out notifications when someone begins streaming a particular game on Twitch.
+# Twitch Watch
+Watches Twitch and sends out notifications when someone begins streaming a particular game.
