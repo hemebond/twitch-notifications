@@ -3,6 +3,12 @@
 
 	"broadcasters": [
 		{
+			"type": "irc",
+			"network": "irc.starchat.net",
+			"room": "#hemebot",
+			"nick": "hemebot"
+		},
+		{
 			"type": "dbus"
 		}
 	],

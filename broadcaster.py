@@ -6,75 +6,120 @@ import socket
 import os
 import json
 import logging
-import xdg
-from xdg.BaseDirectory import xdg_cache_home
+import xdg.BaseDirectory
+import dbus
 
 
-# When a stream notification is sent to the broadcast socket file
-# we read in the JSON data and pass the data onto each broadcaster
-class ListenHandler(asyncore.dispatcher_with_send):
+class ListenHandler(asyncore.dispatcher):
+	"""
+	Incoming data via the socket is passed off to this handler
+	"""
+	def __init__(self, sock):
+		self.logger = logging.getLogger("ListenHandler (%s)" % str(sock.getsockname()))
+		asyncore.dispatcher.__init__(self, sock=sock)
+
 	def handle_read(self):
-		global broadcasters
+		"""
+		When a stream notification is sent to the broadcast socket file
+		we read in the JSON data and pass the data onto each broadcaster
+		"""
+		self.logger.debug("handle_read()")
 
-		data = self.recv(8192)
+		buffer = data = self.recv(4096)
 
-		if data:
+		while data:
+			data = self.recv(4096)
+			buffer += data
+
+		if buffer:
+			self.logger.debug(buffer)
+
+			# Data is received as bytes, convert to string
+			str_data = buffer.decode('utf-8')
+
 			try:
-				streams = json.loads(data)
-			except:
-				logging.debug(data)
+				streams = json.loads(str_data)
+			except Exception as e:
+				self.logger.exception(e)
+				self.logger.debug(str_data)
 				return
 
-			logging.info("Broadcasting")
-			for broadcaster in broadcasters:
+			self.logger.info("Broadcasting")
+
+			for broadcaster in self.broadcasters:
 				for stream in streams:
-					broadcaster.broadcast(stream)
+					try:
+						broadcaster.broadcast(stream)
+					except Exception as e:
+						self.logger.exception(e)
 
 
-# This is the main broadcast listener that creates a UNIX socket to listen
-# for stream notifications (sent from streams.py)
 class ListenServer(asyncore.dispatcher):
-	def __init__(self, path):
+	"""
+	This is the main broadcast listener that creates a UNIX socket to listen
+	for stream notifications (sent from streams.py)
+	"""
+	def __init__(self, socket_path, broadcasters):
+		self.logger = logging.getLogger("ListenServer")
+		self.logger.debug("__init__()")
+
 		asyncore.dispatcher.__init__(self)
 
+		# Store the list of broadcasters
+		self.broadcasters = broadcasters
+
+		self.logger.debug("boardcasters: {0}".format(broadcasters))
+
 		# Create a new socket file
+		self.logger.debug("Creating socket")
 		self.create_socket(socket.AF_UNIX, socket.SOCK_STREAM)
 
 		# Remove the socket file if it already exists
 		# Failure means there is possibly another broadcaster running
-		if os.path.exists(path):
-			os.remove(path)
+		if os.path.exists(socket_path):
+			os.remove(socket_path)
 
 		# Create the socket file and start listening for connections
-		self.bind(path)
-		self.listen(5)
+		self.logger.debug("Binding to socket_path {0}".format(socket_path))
+		self.bind(socket_path)
+		self.listen(1)
 
 	def handle_accept(self):
 		"""
 		Accept connections
 		"""
+		self.logger.debug("handle_accept()")
+
 		client = self.accept()
+
+		self.logger.debug(client)
 
 		if client is not None:
 			sock, addr = client
-			logging.info("Incoming connection from {0}".format(addr))
-			handler = ListenHandler(sock)
+			self.logger.info("Incoming connection from {0}".format(repr(addr)))
+			lh = ListenHandler(sock)
+			lh.broadcasters = self.broadcasters
 
 
 class IrcBroadcaster(asyncore.dispatcher):
-	def __init__(self, **kwargs):
+	def __init__(self, network, room, nick, port=6667):
+		self.logger = logging.getLogger("IrcBroadcaster (%s:%s)" % (network, port))
+		self.logger.debug("__init__()")
+
 		asyncore.dispatcher.__init__(self)
 
-		self._irc_network = kwargs.get("network", "irc.starchat.net")
-		self._irc_port = kwargs.get("port", 6667)
-		self._irc_room = kwargs.get("room", "#hemebot")
-		self._irc_nick = kwargs.get("nick", "hemebot")
+		self._irc_network = network
+		self._irc_port = port
+		self._irc_room = room
+		self._irc_nick = nick
 		self._irc_registered = False
 
 		self.create_socket(socket.AF_INET, socket.SOCK_STREAM)
-		self.connect((self._irc_network, self._irc_port))
+		self.connect((network, port))
 
 	def handle_close(self):
+		self.logger.debug("handle_close()")
+
 		# Exit IRC
 		self.send("QUIT\r\n")
 
@@ -83,46 +128,66 @@ class IrcBroadcaster(asyncore.dispatcher):
 		self.close()
 
 	def handle_read(self):
-		data = self.recv(4096)
+		self.logger.debug("handle_read()")
 
-		if data:
+		try:
+			buffer = data = self.recv(1024)
+		except BlockingIOError as e:
+			# logging.exception(e)
+			return
+
+		while data:
+			try:
+				data = self.recv(1024)
+				buffer += data
+			except BlockingIOError as e:
+				# logging.exception(e)
+				data = None
+
+		if buffer:
+			# Data is received as bytes, convert to string
+			str_data = buffer.decode('UTF-8')
+
 			# Print out the data, commas prevents newline
-			logging.debug(data)
+			self.logger.debug(str_data)
 
-			if data.find("Welcome to the StarChat IRC Network!") != -1:
-				logging.info("Responding to welcome")
+			if str_data.find("Welcome to the StarChat IRC Network!") != -1:
+				self.logger.info("Responding to welcome")
 				self._irc_join(self._irc_room)
 
-			elif data.startswith("PING "):
-				logging.info("Responding to PING")
-				self.send('PONG %s\r\n' % data.split()[1])
+			elif str_data.startswith("PING "):
+				self.logger.info("Responding to PING")
+				self.send('PONG %s\r\n' % str_data.split()[1])
 
 			elif not self._irc_registered:
-				logging.info("Sending NICK details")
+				self.logger.info("Sending NICK details")
 				self.send("NICK {0}\r\n".format(self._irc_nick))
 				self.send("USER {0} {0} {0} :Python IRC\r\n".format(self._irc_nick))
 				self._irc_registered = True
 
-			# else:
-			# # ":hemebond!james@121.98.129.463 PRIVMSG #systemshock :hemebot: !streams"
-
+	def send(self, msg):
+		self.logger.debug("send()")
+		msg = bytes(msg, "UTF-8")
+		super().send(msg)
 
 	def _irc_send(self, msg):
-		logging.debug("IrcBroadcaster._irc_send()")
-		self.send('PRIVMSG %s : %s\r\n' % (self._irc_room, msg))
+		self.logger.debug("_irc_send()")
+		self.send("PRIVMSG %s : %s\r\n" % (self._irc_room, msg))
 
 	def _irc_join(self, chan):
-		logging.debug("IrcBroadcaster._irc_join()")
-		self.send('JOIN %s\r\n' % chan)
+		self.logger.debug("_irc_join()")
+		self.send("JOIN %s\r\n" % chan)
 
 	def broadcast(self, stream):
-		logging.debug("IrcBroadcaster.broadcast()")
+		self.logger.debug("broadcast()")
 		self._irc_send("New \"%s\" stream %s" % (stream['game'], stream['channel']['url']))
 
 
 class DbusBroadcaster(object):
 	def __init__(self, **kwargs):
-		import dbus
+		self.logger = logging.getLogger("DbusBroadcaster")
+
+		self.logger.debug("__init__()")
 
 		_bus_name = "org.freedesktop.Notifications"
 		_object_path = "/org/freedesktop/Notifications"
@@ -132,31 +197,54 @@ class DbusBroadcaster(object):
 		self._interface = dbus.Interface(obj, _interface_name)
 
 	def broadcast(self, stream):
-		logging.debug("DBUS Broadcast")
+		self.logger.debug("broadcast()")
 
 		msg_summary = "New \"{0}\" stream".format(stream['game'])
 		msg_body = "{0}".format(stream['channel']['url'])
-		self._interface.Notify("", 0, "", msg_summary, msg_body, [], [], -1)
+		self._interface.Notify("TwitchWatch", 0, "", msg_summary, msg_body, [], {}, -1)
 
 
 def read_config_file(path):
 	logging.debug("Looking for config '{0}'".format(path))
 
 	if os.path.exists(path):
-		logging.debug("Trying config file '{0}'".format(path))
+		logging.debug("Reading config file '{0}'".format(path))
 
 		with open(path) as f:
 			try:
 				return json.load(f)
 			except Exception as e:
+				logging.error("Could not read config file '{0}'".format(path))
 				logging.exception(e)
 
 	return {}
 
 
-def get_config(appname="twitchwatch"):
+def get_config(args_cfg_path=None, appname="twitchwatch"):
 	"""
 	Checks list of path strings for a config file, reading in each as it goes
+
+	{
+		"log-level": "critical",
+		"socket": "/tmp/twitchwatch.sock",
+
+		"broadcasters": [
+			{
+				"type": "irc",
+				"network": "irc.starchat.net",
+				"port": 6667,
+				"room": "#twitchwatch",
+				"nick": "hemebot"
+			}
+			{
+				"type": "dbus"
+			}
+		],
+		"blacklist": [
+			"twitch_user_1234"
+		]
+	}
+
 
 	:param appname: The name of the application. Used for config and runtime directory names.
 	:return: Dict with the merged set of configuration options
@@ -175,36 +263,79 @@ def get_config(appname="twitchwatch"):
 
 	# The paths to search for the config file
 	cfg_paths = [
-		os.path.join(os.path.dirname(os.path.realpath(__file__)), cfg_file_name),
-		os.path.join(config_dir, cfg_file_name)
+		os.path.join(config_dir, cfg_file_name),
+		os.path.join(os.path.dirname(os.path.realpath(__file__)), cfg_file_name)
 	]
+
+	if args_cfg_path is not None:
+		new_settings = read_config_file(args_cfg_path)
+		cfg.update(new_settings)
 
 	for path in cfg_paths:
 		new_settings = read_config_file(path)
-		cfg.update(new_settings)
 
-	logging.debug("Final configuration: {0}".format(cfg))
+		if new_settings != {}:
+			cfg.update(new_settings)
+			break
+
+	logging.debug("Config file result: {0}".format(cfg))
 
 	return cfg
 
 
-def main(log_level=None):
-	global broadcasters
+def get_args():
+	"""
+	Returns a dict of command line arguments to override config settings
+	"""
+	parser = argparse.ArgumentParser()
+	parser.add_argument("--config",
+	                    default="config.json",
+	                    help="Configuration file in JSON format. Default is config.json in the current working directory.")
+	parser.add_argument("--socket",
+	                    help="The name of the Unix socket file to use. The default Unix socket file name is $XDG_RUNTIME_DIR/twitchwatch.sock")
+	parser.add_argument("--log-level",
+	                    help="Logging level, e.g., debug, info, critical. Default: critical")
+	args = parser.parse_args()
+
+	# Change from an object to a dict
+	args = vars(args)
+
+	# Rename log_level back to log-level
+	args["log-level"] = args.pop("log_level")
+
+	return args
+
+
+def set_logging_level(level):
+	if level in ["debug", "info", "warning", "error", "critical"]:
+		logging.getLogger().setLevel(getattr(logging, level.upper()))
+
+
+def main():
+	logging.basicConfig(
+		level=logging.DEBUG,
+		format="%(name)s: %(message)s"
+	)
+
+	args = get_args()
+
+	if args["log-level"] is not None:
+		set_logging_level(args["log-level"])
 
 	# Load the configuration files
-	cfg = get_config()
+	cfg = get_config(args_cfg_path=args["config"])
 
-	# log-level gets changed to log_level by parse_args()
-	if log_level is None and "log-level" in cfg:
-		logging.getLogger().setLevel(getattr(logging, cfg["log-level"].upper()))
+	# Override config settings with command-line arguments
+	for k, v in args.items():
+		if v is not None:
+			cfg[k] = v
 
-	exit(0)
+	logging.debug("Final configuration: {0}".format(cfg))
 
-	# Get the path for the UNIX socket file
-	socket_file_path = cfg["socket"] if "socket" in cfg else "/tmp/twitch-notifications.sock"
-
-	# Create the broadcast server
-	ListenServer(socket_file_path)
+	# Set the logging level
+	if args["log-level"] is None:
+		if "log-level" in cfg:
+			set_logging_level(cfg["log-level"])
 
 	broadcasters = []
 	if "broadcasters" in cfg:
@@ -223,22 +354,19 @@ def main(log_level=None):
 					DbusBroadcaster()
 				)
 
+	# Get the path to the UNIX socket file for the listen server
+	socket_file_path = cfg['socket']
+
+	# Create the broadcast server
+	server = ListenServer(socket_file_path, broadcasters)
+
 	try:
 		asyncore.loop()
 	finally:
+		# Always clean up
 		if os.path.exists(socket_file_path):
 			os.unlink(socket_file_path)
 
 
 if __name__ == "__main__":
-	parser = argparse.ArgumentParser()
-	parser.add_argument("--log-level",
-						help="Logging level, e.g., debug, info, critical. Default: critical")
-	args = parser.parse_args()
-
-	# Set the logging level
-	if args.log_level is not None:
-		log_level = getattr(logging, args.log_level.upper(), None)
-		logging.basicConfig(level=log_level)
-
-	main(args.log_level)
+	main()
