@@ -222,29 +222,8 @@ def read_config_file(path):
 
 def get_config(args_cfg_path=None, appname="twitchwatch"):
 	"""
-	Checks list of path strings for a config file, reading in each as it goes
-
-	{
-		"log-level": "critical",
-		"socket": "/tmp/twitchwatch.sock",
-
-		"broadcasters": [
-			{
-				"type": "irc",
-				"network": "irc.starchat.net",
-				"port": 6667,
-				"room": "#twitchwatch",
-				"nick": "hemebot"
-			}
-			{
-				"type": "dbus"
-			}
-		],
-		"blacklist": [
-			"twitch_user_1234"
-		]
-	}
-
+	Reads a JSON configuration file. Searches several paths, picking the first
+	file it finds.
 
 	:param appname: The name of the application. Used for config and runtime directory names.
 	:return: Dict with the merged set of configuration options

@@ -1,17 +1,20 @@
 {
 	"log-level": "critical",
+	"socket": "/tmp/twitchwatch.sock",
 
 	"broadcasters": [
 		{
 			"type": "irc",
-			"network": "irc.starchat.net",
-			"room": "#hemebot",
-			"nick": "hemebot"
-		},
+			"network": "irc.freenode.net",
+			"port": 6667,
+			"room": "#twitchwatch",
+			"nick": "twitchwatch"
+		}
 		{
 			"type": "dbus"
 		}
 	],
 	"blacklist": [
+		"twitch_user_1234"
 	]
 }
