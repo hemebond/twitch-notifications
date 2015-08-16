@@ -161,28 +161,30 @@ def main(cfg):
 			new_streams = current_streams
 
 		if new_streams:
-			try:
-				sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-				server_address = cfg["socket"]
-
+			# Are configured to use a socket file for broadcasting?
+			if "socket" in cfg:
 				try:
-					logging.debug("Talking to socket file {0}".format(server_address))
-					sock.connect(server_address)
+					sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+					server_address = cfg["socket"]
+
+					try:
+						logging.debug("Talking to socket file {0}".format(server_address))
+						sock.connect(server_address)
+					except Exception as e:
+						logging.error("Could not connect to socket file {0}".format(server_address))
+						logging.exception(e)
+						return
+
+					message = json.dumps(new_streams)
+					message_bytes = bytes(message, "utf-8")
+
+					logging.debug("Sending '%s'" % message)
+
+					sock.sendall(message_bytes)
 				except Exception as e:
-					logging.error("Could not connect to socket file {0}".format(server_address))
 					logging.exception(e)
-					return
-
-				message = json.dumps(new_streams)
-				message_bytes = bytes(message, "utf-8")
-
-				logging.debug("Sending '%s'" % message)
-
-				sock.sendall(message_bytes)
-			except Exception as e:
-				logging.exception(e)
-			finally:
-				sock.close()
+				finally:
+					sock.close()
 
 	if current_streams_ids != old_streams_ids:
 		stream_cache[game] = current_streams
