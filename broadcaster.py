@@ -249,13 +249,13 @@ def get_config(args_cfg_path=None, appname="twitchwatch"):
 	if args_cfg_path is not None:
 		new_settings = read_config_file(args_cfg_path)
 		cfg.update(new_settings)
+	else:
+		for path in cfg_paths:
+			new_settings = read_config_file(path)
 
-	for path in cfg_paths:
-		new_settings = read_config_file(path)
-
-		if new_settings != {}:
-			cfg.update(new_settings)
-			break
+			if new_settings != {}:
+				cfg.update(new_settings)
+				break
 
 	logging.debug("Config file result: {0}".format(cfg))
 
@@ -268,7 +268,6 @@ def get_args():
 	"""
 	parser = argparse.ArgumentParser()
 	parser.add_argument("--config",
-	                    default="config.json",
 	                    help="Configuration file in JSON format. Default is config.json in the current working directory.")
 	parser.add_argument("--socket",
 	                    help="The name of the Unix socket file to use. The default Unix socket file name is $XDG_RUNTIME_DIR/twitchwatch.sock")
