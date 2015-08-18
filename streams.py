@@ -42,7 +42,7 @@ def make_safe_name(string):
 	return new_string
 
 
-def get_current_streams(game):
+def get_current_streams(game, limit=5):
 	"""
 		Fetches the current list of Twitch streams for a game
 	"""
@@ -50,7 +50,7 @@ def get_current_streams(game):
 	# on the number of streams to return
 	query = urllib.parse.urlencode({
 		"game": game,
-		"limit": 5
+		"limit": limit
 	})
 	url = "https://api.twitch.tv/kraken/streams?%s" % query
 
@@ -89,54 +89,56 @@ def read_stream_cache(cache_file):
 		Returns an empty list if no cache exists.
 	"""
 	logging.debug("get_stream_cache(cache_file='%s')" % cache_file)
-	old_streams = {}
+	streams = {}
 
 	if os.path.exists(cache_file):
-		# Open the file for read+write
 		try:
-			f = open(cache_file, 'r+')
+			f = open(cache_file, 'r')
 		except Exception as e:
 			logging.exception(e)
 			return []
 
 		# Read the list of old streams from the file
 		try:
-			old_streams = json.load(f)
+			streams = json.load(f)
 		except ValueError:
 			logging.info("Cache file is empty")
+		finally:
+			f.close()
 
-	return old_streams
+	return streams
 
 
 def save_stream_cache(cache_file, stream_cache):
 	logging.debug("save_stream_cache('{0}', '{1}')".format(cache_file, stream_cache))
 
-	if os.path.exists(cache_file):
-		try:
-			f = open(cache_file, "w")
-		except Exception as e:
-			logging.exception(e)
-			return
+	try:
+		f = open(cache_file, "w")
+	except Exception as e:
+		logging.exception(e)
+		return
 
-		try:
-			f.write(json.dumps(stream_cache))
-		except Exception as e:
-			logging.exception(e)
-		finally:
-			f.close()
+	try:
+		f.write(json.dumps(stream_cache))
+	except Exception as e:
+		logging.exception(e)
+	finally:
+		f.close()
 
 
 def main(cfg):
 	game = cfg["game"]
 
 	old_streams = []
-	old_streams_ids = []
+	old_streams_channel_ids = []
 
 	new_streams = []
 
+	# Stream IDs change each time the stream is started so we actually use the
+	# channel ID instead as this won't change
 	current_streams = get_current_streams(game)
-	current_streams_ids = [stream["_id"] for stream in current_streams]
-	logging.debug("current_streams_ids: {0}".format(current_streams_ids))
+	current_streams_channel_ids = [stream["channel"]["_id"] for stream in current_streams]
+	logging.debug("current_streams_channel_ids: {0}".format(current_streams_channel_ids))
 
 	# Read in the previous list of streams
 	cache_dir = xdg.BaseDirectory.save_cache_path("twitchwatch")
@@ -149,13 +151,13 @@ def main(cfg):
 		# A list of old stream IDs
 		if game in stream_cache.keys():
 			old_streams = stream_cache[game]
-			old_streams_ids = [stream["_id"] for stream in old_streams]
+			old_streams_channel_ids = [stream["channel"]["_id"] for stream in old_streams]
 
-			logging.debug("old_streams_ids: {0}".format(old_streams_ids))
+			logging.debug("old_streams_channel_ids: {0}".format(old_streams_channel_ids))
 
 			# Iterate through the list of current streams
 			for stream in current_streams:
-				if stream["_id"] not in old_streams_ids:
+				if stream["channel"]["_id"] not in old_streams_channel_ids:
 					new_streams.append(stream)
 		else:
 			new_streams = current_streams
@@ -186,7 +188,7 @@ def main(cfg):
 				finally:
 					sock.close()
 
-	if current_streams_ids != old_streams_ids:
+	if current_streams_channel_ids != old_streams_channel_ids:
 		stream_cache[game] = current_streams
 		save_stream_cache(cache_file, stream_cache)
 
@@ -204,9 +206,8 @@ if __name__ == "__main__":
 	                    help="Logging level, e.g., debug, info, critical. Default: critical")
 	parser.add_argument("--socket",
 	                    help="The name of the Unix socket file to use. The default Unix socket file name is $XDG_RUNTIME_DIR/twitchwatch.sock")
-	parser.add_argument("--nocache",
-	                    action="store_true",
-	                    help="Ignore the cached list of previous streams.")
+	parser.add_argument("--cache-file",
+	                    help="File path where streams should be cached. Defaults to $XDG_CACHE_HOME/twitchwatch/streams.json. Use /dev/null to not cache.")
 	args = vars(parser.parse_args())
 
 	# Rename log_level back to log-level

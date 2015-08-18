@@ -102,7 +102,7 @@ class ListenServer(asyncore.dispatcher):
 
 
 class IrcBroadcaster(asyncore.dispatcher):
-	def __init__(self, network, room, nick, port=6667):
+	def __init__(self, network, room, nick, games=[], port=6667):
 		self.logger = logging.getLogger("IrcBroadcaster (%s:%s)" % (network, port))
 		self.logger.debug("__init__()")
 
@@ -112,6 +112,7 @@ class IrcBroadcaster(asyncore.dispatcher):
 		self._irc_port = port
 		self._irc_room = room
 		self._irc_nick = nick
+		self._games = games
 		self._irc_registered = False
 
 		self.create_socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -180,7 +181,11 @@ class IrcBroadcaster(asyncore.dispatcher):
 
 	def broadcast(self, stream):
 		self.logger.debug("broadcast()")
-		self._irc_send("New \"%s\" stream %s" % (stream['game'], stream['channel']['url']))
+
+		# Only send the notification if the game list is empty
+		# or if the game is in the list
+		if self._games == [] or stream["game"] in self._games:
+			self._irc_send("New \"%s\" stream %s" % (stream['game'], stream['channel']['url']))
 
 
 class DbusBroadcaster(object):
@@ -319,18 +324,23 @@ def main():
 	if "broadcasters" in cfg:
 		for bc in cfg['broadcasters']:
 			if bc['type'] == "irc":
-				broadcasters.append(
-					IrcBroadcaster(
-						network=bc['network'],
-						port=bc.get('port', 6667),
-						room=bc['room'],
-						nick=bc['nick']
-					)
-				)
+				try:
+					new_broadcaster = IrcBroadcaster(network=bc['network'],
+					                                 port=bc.get('port', 6667),
+					                                 room=bc['room'],
+					                                 nick=bc['nick'],
+					                                 games=bc.get("games", []))
+				except Exception as e:
+					logging.error("Could not create IrcBroadcaster")
+					logging.exception(e)
 			elif bc['type'] == "dbus":
-				broadcasters.append(
-					DbusBroadcaster()
-				)
+				try:
+					new_broadcaster = DbusBroadcaster()
+				except Exception as e:
+					logging.error("Could not create DbusBroadcaster")
+					logging.exception(e)
+
+			broadcasters.append(new_broadcaster)
 
 	# Get the path to the UNIX socket file for the listen server
 	socket_file_path = cfg['socket']
