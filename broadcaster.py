@@ -12,25 +12,29 @@ import config
 
 def main(cfg):
 	broadcasters = []
-	if "broadcasters" in cfg:
-		for bc in cfg['broadcasters']:
-			if bc['type'] == "irc":
-				try:
-					new_broadcaster = IrcBroadcaster(network=bc['network'],
-					                                 port=bc.get('port', 6667),
-					                                 room=bc['room'],
-					                                 nick=bc['nick'],
-					                                 games=bc.get("games", []))
-				except Exception as e:
-					logging.error("Could not create IrcBroadcaster")
-					logging.exception(e)
-			elif bc['type'] == "dbus":
-				try:
-					new_broadcaster = DbusBroadcaster()
-				except Exception as e:
-					logging.error("Could not create DbusBroadcaster")
-					logging.exception(e)
 
+	for bc in cfg.get("broadcasters", []):
+		new_broadcaster = None
+
+		if bc['type'] == "irc":
+			try:
+				new_broadcaster = IrcBroadcaster(network=bc['network'],
+				                                 port=bc.get('port', 6667),
+				                                 room=bc['room'],
+				                                 nick=bc['nick'],
+				                                 games=bc.get("games", []),
+				                                 blacklist=cfg.get("blacklist", []))
+			except Exception as e:
+				logging.error("Could not create IrcBroadcaster")
+				logging.exception(e)
+		elif bc['type'] == "dbus":
+			try:
+				new_broadcaster = DbusBroadcaster()
+			except Exception as e:
+				logging.error("Could not create DbusBroadcaster")
+				logging.exception(e)
+
+		if new_broadcaster:
 			broadcasters.append(new_broadcaster)
 
 	# Get the path to the UNIX socket file for the listen server

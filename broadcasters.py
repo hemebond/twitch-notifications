@@ -2,9 +2,12 @@ import logging
 import asyncore
 import socket
 import dbus
+import re
+
+from client import get_current_streams
 
 class IrcBroadcaster(asyncore.dispatcher):
-	def __init__(self, network, room, nick, games=[], port=6667):
+	def __init__(self, network, room, nick, games=[], blacklist=[], port=6667):
 		self.logger = logging.getLogger("IrcBroadcaster (%s:%s)" % (network, port))
 		self.logger.debug("__init__()")
 
@@ -16,6 +19,7 @@ class IrcBroadcaster(asyncore.dispatcher):
 		self._irc_nick = nick
 		self._games = games
 		self._irc_registered = False
+		self._blacklist = blacklist
 
 		self.create_socket(socket.AF_INET, socket.SOCK_STREAM)
 		self.connect((network, port))
@@ -67,6 +71,45 @@ class IrcBroadcaster(asyncore.dispatcher):
 				self.send("NICK {0}\r\n".format(self._irc_nick))
 				self.send("USER {0} {0} {0} :Python IRC\r\n".format(self._irc_nick))
 				self._irc_registered = True
+
+			else:
+				# :hemebond!james@Star995651.bng1.nct.orcon.net.nz PRIVMSG #hemebot :test
+				# :hemebond!james@Star995651.bng1.nct.orcon.net.nz PRIVMSG #hemebot :hemebot:
+				# :hemebond!james@Star995651.bng1.nct.orcon.net.nz PRIVMSG #hemebot :hemebot
+				# :hemebond!james@Star995651.bng1.nct.orcon.net.nz PRIVMSG #hemebot :!streams
+				# :hemebond!james@Star995651.bng1.nct.orcon.net.nz PRIVMSG #hemebot :hemebot: !streams
+
+				regex = re.compile("\:(\S+)\!\S+ PRIVMSG {room} \:{nick}\: (.+)".format(room=self._irc_room,
+				                                                                        nick=self._irc_nick))
+				match = regex.search(str_data)
+
+				if match:
+					user, message = match.groups()
+
+					cmd_streams = re.match(r"\!streams ([a-zA-Z0-9'-_: ]+)", message)
+
+					if cmd_streams:
+						game = cmd_streams.groups()[0]
+
+						# Get the current list of streams
+						current_streams = get_current_streams(game)
+
+						for stream in current_streams:
+							if stream["channel"]["name"] in self._blacklist:
+								self.logger.info("Channel {0} is blacklisted".format(stream["channel"]["name"]))
+								current_streams.remove(stream)
+
+						# Construct a message to send to IRC
+						stream_urls = [stream["channel"]["url"] for stream in current_streams]
+
+						if stream_urls:
+							msg = "{user}: Current {game} streams include {streams}".format(user=user,
+							                                                                game=game,
+							                                                                streams=", ".join(stream_urls))
+						else:
+							msg = "{user}: There are no {game} streams.".format(user=user, game=game)
+
+						self._irc_send(msg)
 
 	def send(self, msg):
 		self.logger.debug("send()")

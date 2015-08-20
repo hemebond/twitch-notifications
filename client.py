@@ -21,7 +21,7 @@ def make_safe_name(string):
 	return new_string
 
 
-def get_current_streams(game, limit=5):
+def get_current_streams(game, limit=5, blacklist=[]):
 	"""
 		Fetches the current list of Twitch streams for a game
 	"""
