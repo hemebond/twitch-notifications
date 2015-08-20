@@ -1,84 +1,14 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 
 import os
 import argparse
-import urllib.request
-import urllib.parse
 import socket
 import json
 import logging
 import xdg.BaseDirectory
-from broadcaster import get_config, set_logging_level
 
-
-class StreamCache(object):
-	def write():
-		pass
-
-	def read():
-		pass
-
-	def get_game():
-		pass
-
-	def set_game():
-		pass
-
-
-def make_safe_name(string):
-	"""
-	Takes a string (game name) and returns a string that should be safe
-	as a filename.
-	"""
-	s = string.lower()
-	new_string = ""
-
-	for c in s:
-		if c.isalnum():
-			new_string += c
-		else:
-			new_string += "_"
-
-	return new_string
-
-
-def get_current_streams(game, limit=5):
-	"""
-		Fetches the current list of Twitch streams for a game
-	"""
-	# Create the query string with the game a limit
-	# on the number of streams to return
-	query = urllib.parse.urlencode({
-		"game": game,
-		"limit": limit
-	})
-	url = "https://api.twitch.tv/kraken/streams?%s" % query
-
-	logging.debug("Requesting: %s" % url)
-
-	request = urllib.request.Request(url)
-	request.add_header("Accept", "application/vnd.twitchtv.v3+json")
-
-	try:
-		response = urllib.request.urlopen(request)
-	except Exception as e:
-		logging.exception(e)
-		return None
-
-	# Read the data out of the response
-	try:
-		data = response.read().decode("utf-8")
-		logging.debug(data)
-	except Exception as e:
-		logging.exception(e)
-		return None
-
-	# Parse the JSON into a Python dict
-	try:
-		return json.loads(data)['streams']
-	except Exception as e:
-		logging.exception(e)
-		return None
+from client import get_current_streams
+import config
 
 
 def read_stream_cache(cache_file):
@@ -127,7 +57,7 @@ def save_stream_cache(cache_file, stream_cache):
 
 
 def main(cfg):
-	game = cfg["game"]
+	game = cfg.get("game")
 
 	old_streams = []
 	old_streams_channel_ids = []
@@ -148,7 +78,6 @@ def main(cfg):
 	stream_cache = read_stream_cache(cache_file)
 
 	if current_streams:
-		# A list of old stream IDs
 		if game in stream_cache.keys():
 			old_streams = stream_cache[game]
 			old_streams_channel_ids = [stream["channel"]["_id"] for stream in old_streams]
@@ -194,6 +123,11 @@ def main(cfg):
 
 
 if __name__ == "__main__":
+	logging.basicConfig(
+		level=logging.DEBUG,
+		format="%(name)s: %(message)s"
+	)
+
 	parser = argparse.ArgumentParser()
 	parser.add_argument("game",
 	                    nargs="?",
@@ -208,33 +142,8 @@ if __name__ == "__main__":
 	                    help="The name of the Unix socket file to use. The default Unix socket file name is $XDG_RUNTIME_DIR/twitchwatch.sock")
 	parser.add_argument("--cache-file",
 	                    help="File path where streams should be cached. Defaults to $XDG_CACHE_HOME/twitchwatch/streams.json. Use /dev/null to not cache.")
-	args = vars(parser.parse_args())
+	args = parser.parse_args()
 
-	# Rename log_level back to log-level
-	args["log-level"] = args.pop("log_level")
-
-	# Initialise a variable to hold our configuration dict
-	cfg = get_config()
-
-	for k, v in args.items():
-		if v is not None:
-			cfg[k] = v
-
-	cfg.update({
-		"game": args["game"]
-	})
-
-	# log-level gets changed to log_level by parse_args()
-	if args["log-level"] is not None:
-		user_log_level = args["log-level"]
-	elif "log-level" in cfg:
-		user_log_level = cfg["log-level"]
-	else:
-		user_log_level = "debug"
-
-	# Set the logging level
-	set_logging_level(user_log_level)
-
-	logging.info("Final configuration: {0}".format(cfg))
+	cfg = config.get_config(args)
 
 	main(cfg)
