@@ -41,9 +41,9 @@ def get_config(args=None, appname="twitchwatch"):
 		args = vars(args)
 
 		# Rename log_level back to log-level
-		args["log-level"] = args.pop("log_level")
-		args["max-age"] = args.pop("max_age")
-		args["cache-file"] = args.pop("cache_file")
+		args["cache-file"] = args.pop("cache_file", None)
+		args["log-level"] = args.pop("log_level", None)
+		args["max-age"] = args.pop("max_age", None)
 	else:
 		args = {}
 
@@ -60,7 +60,7 @@ def get_config(args=None, appname="twitchwatch"):
 		"socket": os.path.join(run_dir, "{0}.sock".format(appname)),
 		"cache-file": os.path.join(cache_dir, "streams.json"),
 		"log-level": "critical",
-		"max-age": "24h",
+		"max-age": "24",
 	}
 
 	# The paths to search for the config file

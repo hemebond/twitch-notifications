@@ -5,6 +5,7 @@ import argparse
 import socket
 import json
 import logging
+from datetime import datetime, timedelta
 import xdg.BaseDirectory
 
 from client import get_current_streams
@@ -79,14 +80,35 @@ def main(cfg):
 
 	if current_streams:
 		if game in stream_cache.keys():
-			old_streams = stream_cache[game]
+			max_age = int(cfg.get("max-age"))
+			max_age_datetime = datetime.now() - timedelta(hours=max_age)
+
+			old_streams = stream_cache.get(game)
+
+			# Get the list of channel ids for old streams
 			old_streams_channel_ids = [stream["channel"]["_id"] for stream in old_streams]
 
 			logging.debug("old_streams_channel_ids: {0}".format(old_streams_channel_ids))
 
 			# Iterate through the list of current streams
 			for stream in current_streams:
-				if stream["channel"]["_id"] not in old_streams_channel_ids:
+				channel_id = stream["channel"]["_id"]
+
+				# We want to make sure old_stream is very old (more than max_age hours ago)
+				if channel_id in old_streams_channel_ids:
+					for old_stream in old_streams:
+						if old_stream["channel"]["_id"] == channel_id:
+							# Get the date/time the old_stream was created
+							created_at = datetime.strptime(old_stream["created_at"], "%Y-%m-%dT%H:%M:%SZ")
+
+							# If the old_stream was created more than max_age hours ago, and
+							# the stream _id is different, this is a new stream
+							if created_at > max_age_datetime and old_stream["_id"] != stream["_id"]:
+								new_streams.append(stream)
+
+							# No need to continue looking in old_streams
+							break
+				else:
 					new_streams.append(stream)
 		else:
 			new_streams = current_streams
@@ -131,17 +153,18 @@ if __name__ == "__main__":
 	parser = argparse.ArgumentParser()
 	parser.add_argument("game",
 	                    nargs="?",
-	                    default="System Shock 2",
 	                    help="This is the title of the game to search for in the Twitch stream list.")
 	parser.add_argument("--config",
 	                    default="config.json",
-	                    help="Configuration file in JSON format. Default is config.json in the current working directory.")
+	                    help="A path to a JSON configuration file. Used instead of any in $XDG_CONFIG_HOME or script directory. Default: none")
 	parser.add_argument("--log-level",
 	                    help="Logging level, e.g., debug, info, warning, error, critical. Default: critical")
 	parser.add_argument("--socket",
-	                    help="The name of the Unix socket file to use. The default Unix socket file name is $XDG_RUNTIME_DIR/twitchwatch.sock")
+	                    help="The name of the Unix socket file to use. Default: $XDG_RUNTIME_DIR/twitchwatch.sock")
 	parser.add_argument("--cache-file",
-	                    help="File path where streams should be cached. Defaults to $XDG_CACHE_HOME/twitchwatch/streams.json. Use /dev/null to not cache.")
+	                    help="File path where streams should be cached. Use /dev/null to not cache. Default: $XDG_CACHE_HOME/twitchwatch/streams.json")
+	parser.add_argument("--max-age",
+	                    help="Integer. Number of hours. Any cache entry older than this number of hours wil be ignored when deciding if the stream is new. Default: 24")
 	args = parser.parse_args()
 
 	cfg = config.get_config(args)
