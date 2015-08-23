@@ -1,5 +1,6 @@
-import logging
+from datetime import datetime, timedelta
 import asyncore
+import logging
 import socket
 import dbus
 import re
@@ -7,7 +8,10 @@ import re
 from client import get_current_streams
 
 class IrcBroadcaster(asyncore.dispatcher):
-	def __init__(self, network, room, nick, games=[], blacklist=[], port=6667):
+	def __init__(self, network, room, nick, games=[], blacklist=[], port=6667, cmd_limit=30):
+		"""
+		cmd_limit is the minimum amount of time, in seconds, between IRC command requests
+		"""
 		self.logger = logging.getLogger("IrcBroadcaster (%s:%s)" % (network, port))
 		self.logger.debug("__init__()")
 
@@ -20,6 +24,8 @@ class IrcBroadcaster(asyncore.dispatcher):
 		self._games = games
 		self._irc_registered = False
 		self._blacklist = blacklist
+		self._last_check = datetime.now() - timedelta(seconds=cmd_limit)
+		self._last_check_limit = cmd_limit
 
 		self.create_socket(socket.AF_INET, socket.SOCK_STREAM)
 		self.connect((network, port))
@@ -73,12 +79,6 @@ class IrcBroadcaster(asyncore.dispatcher):
 				self._irc_registered = True
 
 			else:
-				# :hemebond!james@Star995651.bng1.nct.orcon.net.nz PRIVMSG #hemebot :test
-				# :hemebond!james@Star995651.bng1.nct.orcon.net.nz PRIVMSG #hemebot :hemebot:
-				# :hemebond!james@Star995651.bng1.nct.orcon.net.nz PRIVMSG #hemebot :hemebot
-				# :hemebond!james@Star995651.bng1.nct.orcon.net.nz PRIVMSG #hemebot :!streams
-				# :hemebond!james@Star995651.bng1.nct.orcon.net.nz PRIVMSG #hemebot :hemebot: !streams
-
 				regex = re.compile("\:(\S+)\!\S+ PRIVMSG {room} \:{nick}\: (.+)".format(room=self._irc_room,
 				                                                                        nick=self._irc_nick))
 				match = regex.search(str_data)
@@ -89,27 +89,34 @@ class IrcBroadcaster(asyncore.dispatcher):
 					cmd_streams = re.match(r"\!streams ([a-zA-Z0-9'-_: ]+)", message)
 
 					if cmd_streams:
-						game = cmd_streams.groups()[0]
+						# Make sure a certain amount of time has passed since the last command request
+						if datetime.now() > (self._last_check + timedelta(seconds=self._last_check_limit)):
+							self._last_check = datetime.now()
 
-						# Get the current list of streams
-						current_streams = get_current_streams(game)
+							game = cmd_streams.groups()[0]
 
-						for stream in current_streams:
-							if stream["channel"]["name"] in self._blacklist:
-								self.logger.info("Channel {0} is blacklisted".format(stream["channel"]["name"]))
-								current_streams.remove(stream)
+							# Get the current list of streams
+							current_streams = get_current_streams(game)
 
-						# Construct a message to send to IRC
-						stream_urls = [stream["channel"]["url"] for stream in current_streams]
+							for stream in current_streams:
+								if stream["channel"]["name"] in self._blacklist:
+									self.logger.info("Channel {0} is blacklisted".format(stream["channel"]["name"]))
+									current_streams.remove(stream)
 
-						if stream_urls:
-							msg = "{user}: Current {game} streams include {streams}".format(user=user,
-							                                                                game=game,
-							                                                                streams=", ".join(stream_urls))
+							# Construct a message to send to IRC
+							stream_urls = [stream["channel"]["url"] for stream in current_streams]
+
+							if stream_urls:
+								msg = "{user}: Current {game} streams include {streams}".format(user=user,
+								                                                                game=game,
+								                                                                streams=", ".join(stream_urls))
+							else:
+								msg = "{user}: There are no {game} streams.".format(user=user, game=game)
+
+							self._irc_send(msg)
 						else:
-							msg = "{user}: There are no {game} streams.".format(user=user, game=game)
-
-						self._irc_send(msg)
+							# Not enough time has passed since the last request
+							self.logger.info("Not enough time since last command request")
 
 	def send(self, msg):
 		self.logger.debug("send()")
