@@ -137,7 +137,7 @@ if __name__ == "__main__":
 	                    default="config.json",
 	                    help="Configuration file in JSON format. Default is config.json in the current working directory.")
 	parser.add_argument("--log-level",
-	                    help="Logging level, e.g., debug, info, critical. Default: critical")
+	                    help="Logging level, e.g., debug, info, warning, error, critical. Default: critical")
 	parser.add_argument("--socket",
 	                    help="The name of the Unix socket file to use. The default Unix socket file name is $XDG_RUNTIME_DIR/twitchwatch.sock")
 	parser.add_argument("--cache-file",
