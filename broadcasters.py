@@ -24,7 +24,7 @@ class IrcBroadcaster(asyncore.dispatcher):
 		self._games = games
 		self._irc_registered = False
 		self._blacklist = blacklist
-		self._last_check = datetime.now() - timedelta(seconds=cmd_limit)
+		self._last_check = None
 		self._last_check_limit = cmd_limit
 
 		self.create_socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -90,7 +90,7 @@ class IrcBroadcaster(asyncore.dispatcher):
 
 					if cmd_streams:
 						# Make sure a certain amount of time has passed since the last command request
-						if datetime.now() > (self._last_check + timedelta(seconds=self._last_check_limit)):
+						if self._last_check is None or datetime.now() >= (self._last_check + timedelta(seconds=self._last_check_limit)):
 							self._last_check = datetime.now()
 
 							game = cmd_streams.groups()[0]
