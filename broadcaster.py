@@ -10,7 +10,23 @@ from broadcasters import IrcBroadcaster, DbusBroadcaster
 import config
 
 
-def main(cfg):
+if __name__ == "__main__":
+	logging.basicConfig(
+		level=logging.DEBUG,
+		format="%(name)s: %(message)s"
+	)
+
+	parser = argparse.ArgumentParser()
+	parser.add_argument("--config",
+	                    help="Configuration file in JSON format. Default is config.json in the current working directory.")
+	parser.add_argument("--socket",
+	                    help="The name of the Unix socket file to use. The default Unix socket file name is $XDG_RUNTIME_DIR/twitchwatch.sock")
+	parser.add_argument("--log-level",
+	                    help="Logging level, e.g., debug, info, warning, error, critical. Default: critical")
+	args = parser.parse_args()
+
+	cfg = config.get_config(args)
+
 	broadcasters = []
 
 	for bc in cfg.get("broadcasters", []):
@@ -49,23 +65,3 @@ def main(cfg):
 		# Always clean up
 		if os.path.exists(socket_file_path):
 			os.unlink(socket_file_path)
-
-
-if __name__ == "__main__":
-	logging.basicConfig(
-		level=logging.DEBUG,
-		format="%(name)s: %(message)s"
-	)
-
-	parser = argparse.ArgumentParser()
-	parser.add_argument("--config",
-	                    help="Configuration file in JSON format. Default is config.json in the current working directory.")
-	parser.add_argument("--socket",
-	                    help="The name of the Unix socket file to use. The default Unix socket file name is $XDG_RUNTIME_DIR/twitchwatch.sock")
-	parser.add_argument("--log-level",
-	                    help="Logging level, e.g., debug, info, critical. Default: critical")
-	args = parser.parse_args()
-
-	cfg = config.get_config(args)
-
-	main(cfg)
