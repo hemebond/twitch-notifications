@@ -3,6 +3,8 @@ import urllib.request
 import urllib.parse
 import json
 
+import config
+
 
 def make_safe_name(string):
 	"""
@@ -25,6 +27,8 @@ def get_current_streams(game, limit=5, blacklist=[]):
 	"""
 		Fetches the current list of Twitch streams for a game
 	"""
+	cfg = config.get_config()
+
 	# Create the query string with the game a limit
 	# on the number of streams to return
 	query = urllib.parse.urlencode({
@@ -37,6 +41,7 @@ def get_current_streams(game, limit=5, blacklist=[]):
 
 	request = urllib.request.Request(url)
 	request.add_header("Accept", "application/vnd.twitchtv.v3+json")
+	request.add_header("Client-ID", cfg['client-id'])
 
 	try:
 		response = urllib.request.urlopen(request)

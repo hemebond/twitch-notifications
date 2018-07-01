@@ -6,7 +6,7 @@ import socket
 import json
 import logging
 from datetime import datetime, timedelta
-import xdg.BaseDirectory
+from xdg import (XDG_CACHE_HOME, XDG_CONFIG_DIRS, XDG_CONFIG_HOME, XDG_DATA_DIRS, XDG_DATA_HOME, XDG_RUNTIME_DIR)
 
 from client import get_current_streams
 import config
@@ -72,7 +72,7 @@ def main(cfg):
 	logging.debug("current_streams_channel_ids: {0}".format(current_streams_channel_ids))
 
 	# Read in the previous list of streams
-	cache_dir = xdg.BaseDirectory.save_cache_path("twitchwatch")
+	cache_dir = os.path.join(XDG_CACHE_HOME, "twitchwatch")
 	cache_file = os.path.join(cache_dir, "streams.json")
 
 	# Get the old list of streams and give it to current list to save

@@ -1,8 +1,6 @@
 from datetime import datetime, timedelta
 import asyncore
 import logging
-import socket
-import dbus
 import re
 
 from client import get_current_streams
@@ -12,6 +10,8 @@ class IrcBroadcaster(asyncore.dispatcher):
 		"""
 		cmd_limit is the minimum amount of time, in seconds, between IRC command requests
 		"""
+		import socket
+
 		self.logger = logging.getLogger("IrcBroadcaster (%s:%s)" % (network, port))
 		self.logger.debug("__init__()")
 
@@ -28,34 +28,23 @@ class IrcBroadcaster(asyncore.dispatcher):
 		self._last_check_limit = cmd_limit
 
 		self.create_socket(socket.AF_INET, socket.SOCK_STREAM)
-		self.connect((network, port))
 
-	def handle_close(self):
-		self.logger.debug("handle_close()")
-
-		# Exit IRC
-		self.send("QUIT\r\n")
-
-		# Close the connection to the server
-		self.shutdown(socket.SHUT_RDWR)
-		self.close()
+		try:
+			self.connect((network, port))
+		except Exception as e:
+			self.logger.error("Could not create IrcBroadcaster")
+			self.logger.error(e)
+			self.close()
 
 	def handle_read(self):
 		self.logger.debug("handle_read()")
 
-		try:
-			buffer = data = self.recv(1024)
-		except BlockingIOError as e:
-			# logging.exception(e)
-			return
-
-		while data:
+		buffer = b''
+		while True:
 			try:
-				data = self.recv(1024)
-				buffer += data
+				buffer += self.recv(1024)
 			except BlockingIOError as e:
-				# logging.exception(e)
-				data = None
+				break
 
 		if buffer:
 			# Data is received as bytes, convert to string
@@ -64,59 +53,59 @@ class IrcBroadcaster(asyncore.dispatcher):
 			# Print out the data, commas prevents newline
 			self.logger.debug(str_data)
 
-			if str_data.find("Welcome to the StarChat IRC Network!") != -1:
-				self.logger.info("Responding to welcome")
-				self._irc_join(self._irc_room)
+			for line in str_data.split('\r\n'):
+				if line.find("End of /MOTD command") != -1:
+					self.logger.info("Responding to welcome")
+					self._irc_join(self._irc_room)
 
-			elif str_data.startswith("PING "):
-				self.logger.info("Responding to PING")
-				self.send('PONG %s\r\n' % str_data.split()[1])
+				elif line.startswith("PING "):
+					self.logger.info("Responding to PING")
+					self.send('PONG %s\r\n' % line.split()[1])
 
-			elif not self._irc_registered:
-				self.logger.info("Sending NICK details")
-				self.send("NICK {0}\r\n".format(self._irc_nick))
-				self.send("USER {0} {0} {0} :Python IRC\r\n".format(self._irc_nick))
-				self._irc_registered = True
+				elif not self._irc_registered:
+					self.logger.info("Sending NICK details")
+					self.send("NICK {0}\r\n".format(self._irc_nick))
+					self.send("USER {0} {0} {0} :Python IRC\r\n".format(self._irc_nick))
+					self._irc_registered = True
 
-			else:
-				regex = re.compile("\:(\S+)\!\S+ PRIVMSG {room} \:{nick}\: (.+)".format(room=self._irc_room,
-				                                                                        nick=self._irc_nick))
-				match = regex.search(str_data)
+				else:
+					regex_string = "\:(\S+)\!\S+ PRIVMSG {room} \:{nick}\: ([a-zA-Z0-9'-: ]+)"
+					regex = re.compile(regex_string.format(room=self._irc_room, nick=self._irc_nick))
+					match = regex.search(line)
 
-				if match:
-					user, message = match.groups()
+					if match:
+						user, message = match.groups()
+						self.logger.debug("Got message: %s" % message)
 
-					cmd_streams = re.match(r"\!streams ([a-zA-Z0-9'-_: ]+)", message)
-
-					if cmd_streams:
-						# Make sure a certain amount of time has passed since the last command request
-						if self._last_check is None or datetime.now() >= (self._last_check + timedelta(seconds=self._last_check_limit)):
-							self._last_check = datetime.now()
-
-							game = cmd_streams.groups()[0]
-
-							# Get the current list of streams
-							current_streams = get_current_streams(game)
-
-							for stream in current_streams:
-								if stream["channel"]["name"] in self._blacklist:
-									self.logger.info("Channel {0} is blacklisted".format(stream["channel"]["name"]))
-									current_streams.remove(stream)
-
-							# Construct a message to send to IRC
-							stream_urls = [stream["channel"]["url"] for stream in current_streams]
-
-							if stream_urls:
-								msg = "{user}: Current {game} streams include {streams}".format(user=user,
-								                                                                game=game,
-								                                                                streams=", ".join(stream_urls))
-							else:
-								msg = "{user}: There are no {game} streams.".format(user=user, game=game)
-
-							self._irc_send(msg)
+						if message == 'quit':
+							self.close()
 						else:
-							# Not enough time has passed since the last request
-							self.logger.info("Not enough time since last command request")
+							# Make sure a certain amount of time has passed since the last command request
+							if self._last_check is None or datetime.now() >= (self._last_check + timedelta(seconds=self._last_check_limit)):
+								self._last_check = datetime.now()
+
+								# Get the current list of streams
+								current_streams = get_current_streams(message)
+
+								for stream in current_streams:
+									if stream["channel"]["name"] in self._blacklist:
+										self.logger.info("Channel {0} is blacklisted".format(stream["channel"]["name"]))
+										current_streams.remove(stream)
+
+								# Construct a message to send to IRC
+								stream_urls = [stream["channel"]["url"] for stream in current_streams]
+
+								if stream_urls:
+									msg = "{user}: Current {game} streams include {streams}".format(user=user,
+									                                                                game=message,
+									                                                                streams=", ".join(stream_urls))
+								else:
+									msg = "{user}: There are no {game} streams.".format(user=user, game=message)
+
+								self._irc_send(msg)
+							else:
+								# Not enough time has passed since the last request
+								self.logger.info("Not enough time since last command request")
 
 	def send(self, msg):
 		self.logger.debug("send()")
@@ -131,19 +120,32 @@ class IrcBroadcaster(asyncore.dispatcher):
 		self.logger.debug("_irc_join()")
 		self.send("JOIN %s\r\n" % chan)
 
+		msg = ''
+		while msg.find('End of /NAMES list.') == -1:
+			try:
+				msg = self.recv(2048).decode('UTF-8')
+			except BlockingIOError as e:
+				break
+
+			msg = msg.strip('\r\n')
+			self.logger.info(msg)
+
 	def broadcast(self, stream):
 		self.logger.debug("broadcast()")
 
 		# Only send the notification if the game list is empty
 		# or if the game is in the list
 		if self._games == [] or stream["game"] in self._games:
-			self._irc_send("New \"%s\" stream %s" % (stream['game'], stream['channel']['url']))
+			self._irc_send("{game} | {status} | {url}".format(game=stream['game'],
+			                                                  url=stream['channel']['url'],
+			                                                  status=stream['channel']['status'].replace('\n', ' ')))
 
 
 class DbusBroadcaster(object):
 	def __init__(self, **kwargs):
-		self.logger = logging.getLogger("DbusBroadcaster")
+		import dbus
 
+		self.logger = logging.getLogger("DbusBroadcaster")
 		self.logger.debug("__init__()")
 
 		_bus_name = "org.freedesktop.Notifications"

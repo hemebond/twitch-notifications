@@ -34,10 +34,10 @@ if __name__ == "__main__":
 
 		if bc['type'] == "irc":
 			try:
-				new_broadcaster = IrcBroadcaster(network=bc['network'],
-				                                 port=bc.get('port', 6667),
-				                                 room=bc['room'],
-				                                 nick=bc['nick'],
+				new_broadcaster = IrcBroadcaster(network=bc["network"],
+				                                 port=bc.get("port", 6667),
+				                                 room=bc["room"],
+				                                 nick=bc["nick"],
 				                                 games=bc.get("games", []),
 				                                 blacklist=cfg.get("blacklist", []))
 			except Exception as e:
@@ -61,6 +61,8 @@ if __name__ == "__main__":
 
 	try:
 		asyncore.loop()
+	except KeyboardInterrupt as e:
+		pass
 	finally:
 		# Always clean up
 		if os.path.exists(socket_file_path):

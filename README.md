@@ -3,8 +3,8 @@ Watches Twitch and sends out notifications when someone begins streaming a parti
 
 ## Requirements
 
-* Python 3.4
-* PyXDG
+* Python 3
+* xdg
 * Python-DBUS
 
 ## Configuration
@@ -40,7 +40,7 @@ And, assuming someone is streaming "My Game", you should see some desktop notifi
     {
       "type": "irc",
       "network": "irc.freenode.net",
-      "room": "#room",
+      "room": "##myroom",
       "nick": "twitchbot"
     },
     {

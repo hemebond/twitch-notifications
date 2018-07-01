@@ -1,0 +1,2 @@
+dbus-python==1.2.8
+xdg==3.0.2

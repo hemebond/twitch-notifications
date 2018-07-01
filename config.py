@@ -1,7 +1,7 @@
 import logging
 import os
 import json
-import xdg.BaseDirectory
+from xdg import (XDG_CACHE_HOME, XDG_CONFIG_DIRS, XDG_CONFIG_HOME, XDG_DATA_DIRS, XDG_DATA_HOME, XDG_RUNTIME_DIR)
 
 
 def set_logging_level(level):
@@ -50,9 +50,9 @@ def get_config(args=None, appname="twitchwatch"):
 	# Set the logging level
 	set_logging_level(args.get("log-level"))
 
-	config_dir = xdg.BaseDirectory.save_config_path(appname)
-	cache_dir = xdg.BaseDirectory.save_cache_path(appname)
-	run_dir = xdg.BaseDirectory.get_runtime_dir()
+	config_dir = os.path.join(XDG_CONFIG_HOME, appname)
+	cache_dir = os.path.join(XDG_CACHE_HOME, appname)
+	run_dir = XDG_RUNTIME_DIR
 	cfg_file_name = "config.json"
 
 	# Configuration defaults
