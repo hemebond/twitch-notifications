@@ -26,6 +26,8 @@ class IrcBroadcaster(asyncore.dispatcher):
 		self._blacklist = blacklist
 		self._last_check = None
 		self._last_check_limit = cmd_limit
+		self._buffer = ''
+		self._states = []
 
 		self.create_socket(socket.AF_INET, socket.SOCK_STREAM)
 
@@ -35,6 +37,14 @@ class IrcBroadcaster(asyncore.dispatcher):
 			self.logger.error("Could not create IrcBroadcaster")
 			self.logger.error(e)
 			self.close()
+
+	def writable(self):
+		return False
+		# return (len(self._buffer) > 0)
+
+	def handle_write(self):
+		sent = self.send(self._buffer)
+		self._buffer = self._buffer[sent:]
 
 	def handle_read(self):
 		self.logger.debug("handle_read()")
@@ -110,7 +120,7 @@ class IrcBroadcaster(asyncore.dispatcher):
 	def send(self, msg):
 		self.logger.debug("send()")
 		msg = bytes(msg, "UTF-8")
-		super().send(msg)
+		return super().send(msg)
 
 	def _irc_send(self, msg):
 		self.logger.debug("_irc_send()")
