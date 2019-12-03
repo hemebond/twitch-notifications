@@ -1,4 +1,4 @@
-#!/usr/bin/python3
+#!/usr/bin/env python3
 
 import os
 import argparse
@@ -68,7 +68,7 @@ def main(cfg):
 	# Stream IDs change each time the stream is started so we actually use the
 	# channel ID instead as this won't change
 	current_streams = get_current_streams(game)
-	current_streams_channel_ids = [stream["channel"]["_id"] for stream in current_streams]
+	current_streams_channel_ids = [stream["user_id"] for stream in current_streams]
 	logging.debug("current_streams_channel_ids: {0}".format(current_streams_channel_ids))
 
 	# Read in the previous list of streams
@@ -83,13 +83,13 @@ def main(cfg):
 			old_streams = stream_cache.get(game)
 
 			# Get the list of channel ids for old streams
-			old_streams_channel_ids = [stream["channel"]["_id"] for stream in old_streams]
+			old_streams_channel_ids = [stream["user_id"] for stream in old_streams]
 
 			logging.debug("old_streams_channel_ids: {0}".format(old_streams_channel_ids))
 
 			# Iterate through the list of current streams
 			for stream in current_streams:
-				channel_id = stream["channel"]["_id"]
+				channel_id = stream["user_id"]
 
 				# We want to make sure old_stream is very old (more than max_age hours ago)
 				if channel_id not in old_streams_channel_ids:
@@ -100,6 +100,10 @@ def main(cfg):
 		if new_streams:
 			# Are configured to use a socket file for broadcasting?
 			if "socket" in cfg:
+				# Add the game name to each stream dict
+				for stream in new_streams:
+					stream['game'] = game
+
 				try:
 					sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
 					server_address = cfg["socket"]
@@ -115,6 +119,7 @@ def main(cfg):
 					message = json.dumps(new_streams)
 					message_bytes = bytes(message, "utf-8")
 
+					# root: Sending '[{"id": "36338956736", "user_id": "25590253", "user_name": "Rainoa92", "game_id": "118212", "type": "live", "title": "playing some random games with friends :3", "viewer_count": 4, "started_at": "2019-12-03T00:03:33Z", "language": "en", "thumbnail_url": "https://static-cdn.jtvnw.net/previews-ttv/live_user_rainoa92-{width}x{height}.jpg", "tag_ids": ["6ea6bca4-4712-4ab9-a906-e3336a9d8039"]}]'
 					logging.debug("Sending '%s'" % message)
 
 					sock.sendall(message_bytes)

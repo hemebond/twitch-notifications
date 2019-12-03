@@ -62,7 +62,7 @@ class ListenServer(asyncore.dispatcher):
 		# Store the list of broadcasters
 		self.broadcasters = broadcasters
 
-		self.logger.debug("boardcasters: {0}".format(broadcasters))
+		self.logger.debug("broadcasters: {0}".format(broadcasters))
 
 		# Create a new socket file
 		self.logger.debug("Creating socket")

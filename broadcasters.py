@@ -68,6 +68,10 @@ class IrcBroadcaster(asyncore.dispatcher):
 					self.logger.info("Responding to welcome")
 					self._irc_join(self._irc_room)
 
+				elif line.find("MOTD File is missing") != -1:
+					self.logger.info("Missing MOTD")
+					self._irc_join(self._irc_room)
+
 				elif line.startswith("PING "):
 					self.logger.info("Responding to PING")
 					self.send('PONG %s\r\n' % line.split()[1])
@@ -147,8 +151,8 @@ class IrcBroadcaster(asyncore.dispatcher):
 		# or if the game is in the list
 		if self._games == [] or stream["game"] in self._games:
 			self._irc_send("{game} | {status} | {url}".format(game=stream['game'],
-			                                                  url=stream['channel']['url'],
-			                                                  status=stream['channel']['status'].replace('\n', ' ')))
+			                                                  url="https://www.twitch.tv/%s" % stream['user_name'],
+			                                                  status=stream['title'].replace('\n', ' ')))
 
 
 class DbusBroadcaster(object):
@@ -169,5 +173,5 @@ class DbusBroadcaster(object):
 		self.logger.debug("broadcast()")
 
 		msg_summary = "New \"{0}\" stream".format(stream['game'])
-		msg_body = "{0}".format(stream['channel']['url'])
+		msg_body = "https://www.twitch.tv/{0}".format(stream['user_name'])
 		self._interface.Notify("TwitchWatch", 0, "", msg_summary, msg_body, [], {}, -1)

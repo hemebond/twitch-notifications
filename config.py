@@ -64,21 +64,21 @@ def get_config(args=None, appname="twitchwatch"):
 	}
 
 	# The paths to search for the config file
-	cfg_paths = [
-		os.path.join(config_dir, cfg_file_name),
-		os.path.join(os.path.dirname(os.path.realpath(__file__)), cfg_file_name)
-	]
-
 	if args.get("config", False):
-		new_settings = read_config_file(args.get("config"))
-		cfg.update(new_settings)
+		cfg_paths = [args.get("config")]
 	else:
-		for path in cfg_paths:
-			new_settings = read_config_file(path)
+		cfg_paths = [
+			os.path.join(config_dir, cfg_file_name),
+			os.path.join(os.path.dirname(os.path.realpath(__file__)), cfg_file_name)
+		]
 
-			if new_settings != {}:
-				cfg.update(new_settings)
-				break
+	for path in cfg_paths:
+		settings_from_file = read_config_file(path)
+		logging.debug(settings_from_file)
+
+		if settings_from_file != {}:
+			cfg.update(settings_from_file)
+			break
 
 	logging.info("Configuration file: {0}".format(cfg))
 
