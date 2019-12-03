@@ -5,6 +5,11 @@ import re
 
 from client import get_current_streams
 
+try:
+	import dbus
+except ImportError as e:
+	pass
+
 class IrcBroadcaster(asyncore.dispatcher):
 	def __init__(self, network, room, nick, games=[], blacklist=[], port=6667, cmd_limit=30):
 		"""
@@ -157,11 +162,12 @@ class IrcBroadcaster(asyncore.dispatcher):
 
 class DbusBroadcaster(object):
 	def __init__(self, **kwargs):
-		import dbus
-
 		self.logger = logging.getLogger("DbusBroadcaster")
 		self.logger.debug("__init__()")
 
+		self.get_interface()
+
+	def get_interface(self):
 		_bus_name = "org.freedesktop.Notifications"
 		_object_path = "/org/freedesktop/Notifications"
 		_interface_name = _bus_name
@@ -169,9 +175,17 @@ class DbusBroadcaster(object):
 		obj = session_bus.get_object(_bus_name, _object_path)
 		self._interface = dbus.Interface(obj, _interface_name)
 
-	def broadcast(self, stream):
-		self.logger.debug("broadcast()")
-
+	def send_notification(self, stream):
 		msg_summary = "New \"{0}\" stream".format(stream['game'])
 		msg_body = "https://www.twitch.tv/{0}".format(stream['user_name'])
 		self._interface.Notify("TwitchWatch", 0, "", msg_summary, msg_body, [], {}, -1)
+
+	def broadcast(self, stream):
+		self.logger.debug("broadcast()")
+
+		try:
+			self.send_notification(stream)
+		except dbus.exceptions.DBusException:
+			self.logger.warn("DBus session invalid, reconnecting.")
+			self.get_interface()
+			self.send_notification(stream)
