@@ -5,10 +5,6 @@ import re
 
 from client import get_current_streams
 
-try:
-	import dbus
-except ImportError as e:
-	pass
 
 class IrcBroadcaster(asyncore.dispatcher):
 	def __init__(self, network, room, nick, games=[], blacklist=[], port=6667, cmd_limit=30):
@@ -168,6 +164,8 @@ class DbusBroadcaster(object):
 		self.get_interface()
 
 	def get_interface(self):
+		import dbus
+
 		_bus_name = "org.freedesktop.Notifications"
 		_object_path = "/org/freedesktop/Notifications"
 		_interface_name = _bus_name
@@ -182,6 +180,8 @@ class DbusBroadcaster(object):
 
 	def broadcast(self, stream):
 		self.logger.debug("broadcast()")
+
+		import dbus
 
 		try:
 			self.send_notification(stream)
