@@ -61,7 +61,7 @@ if __name__ == "__main__":
 
 	try:
 		asyncore.loop()
-	except KeyboardInterrupt as e:
+	except KeyboardInterrupt:
 		pass
 	finally:
 		# Always clean up

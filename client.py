@@ -2,8 +2,12 @@ import logging
 import urllib.request
 import urllib.parse
 import json
+from twitchAPI.twitch import Twitch
 
 import config
+
+
+log = logging.getLogger(__name__)
 
 
 def make_safe_name(string):
@@ -23,7 +27,7 @@ def make_safe_name(string):
 	return new_string
 
 
-def get_game_id(game):
+def get_game_id(twitch_client, game):
 	'''
 	Returns the game_id for a game
 
@@ -32,25 +36,28 @@ def get_game_id(game):
 
 	cfg = config.get_config()
 
+	twitch = Twitch(cfg['client-id'], cfg['client-secret'])
+
 	# First need to fetch the game_id
 	query = urllib.parse.urlencode({
 		"name": game,
 	})
 	url = "https://api.twitch.tv/helix/games?%s" % query
 
-	logging.debug("Requesting: %s" % url)
+	log.debug("Requesting: %s" % url)
 
 	request = urllib.request.Request(url)
 	request.add_header("Accept", "application/vnd.twitchtv.v3+json")
-	request.add_header("Client-ID", cfg['client-id'])
+	request.add_header("Client-Id", cfg['client-id'])
 
 	response = urllib.request.urlopen(request)
 
 	# Read the data out of the response
 	data = response.read().decode("utf-8")
-	logging.debug(data)
+	log.debug(data)
 
 	return json.loads(data)['data'][0]['id']
+
 
 
 def get_current_streams(game, limit=5, blacklist=[]):
@@ -63,45 +70,28 @@ def get_current_streams(game, limit=5, blacklist=[]):
 	"""
 	cfg = config.get_config()
 
-	try:
-		game_id = get_game_id(game)
-	except:
-		return None
-
-	# Create the query string with the game a limit
-	# on the number of streams to return
-	query = urllib.parse.urlencode({
-		"game_id": game_id,
-		"limit": limit
-	})
-	url = "https://api.twitch.tv/helix/streams?%s" % query
-
-	logging.debug("Requesting: %s" % url)
-
-	request = urllib.request.Request(url)
-	request.add_header("Accept", "application/vnd.twitchtv.v3+json")
-	request.add_header("Client-ID", cfg['client-id'])
+	twitch = Twitch(cfg['client-id'], cfg['client-secret'])
+	twitch.authenticate_app([])
 
 	try:
-		response = urllib.request.urlopen(request)
+		response = twitch.get_games(names=[game])
 	except Exception as e:
-		logging.exception(e)
+		log.exception(e)
 		return None
 
-	# Read the data out of the response
+	log.debug(response)
+
+	game_id = [game['id'] for game in response['data']]
+
 	try:
-		data = response.read().decode("utf-8")
-		logging.debug(data)
+		response = twitch.get_streams(game_id=game_id)
+		log.debug(response)
 	except Exception as e:
-		logging.exception(e)
+		log.exception(e)
 		return None
 
-	# Parse the JSON into a Python dict
-	try:
-		return json.loads(data)['data']
-	except Exception as e:
-		logging.exception(e)
-		return None
+	return response['data']
+
 
 
 class StreamCache(object):

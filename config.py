@@ -4,6 +4,9 @@ import json
 from xdg import (XDG_CACHE_HOME, XDG_CONFIG_DIRS, XDG_CONFIG_HOME, XDG_DATA_DIRS, XDG_DATA_HOME, XDG_RUNTIME_DIR)
 
 
+log = logging.getLogger(__name__)
+
+
 def set_logging_level(level):
 	if level in ["debug", "info", "warning", "error", "critical"]:
 		logging.getLogger().setLevel(getattr(logging, level.upper()))
@@ -13,17 +16,17 @@ def read_config_file(path):
 	"""
 	Takes a path to a JSON file, reads and parses it, returns as dict
 	"""
-	logging.debug("Looking for config '{0}'".format(path))
+	log.debug("Looking for config '{0}'".format(path))
 
 	if os.path.exists(path):
-		logging.debug("Reading config file '{0}'".format(path))
+		log.debug("Reading config file '{0}'".format(path))
 
 		with open(path) as f:
 			try:
 				return json.load(f)
 			except Exception as e:
-				logging.error("Could not read config file '{0}'".format(path))
-				logging.exception(e)
+				log.error("Could not read config file '{0}'".format(path))
+				log.exception(e)
 
 	return {}
 
@@ -58,9 +61,9 @@ def get_config(args=None, appname="twitchwatch"):
 	# Configuration defaults
 	cfg = {
 		"socket": os.path.join(run_dir, "{0}.sock".format(appname)),
-		"cache-file": os.path.join(cache_dir, "streams.json"),
-		"log-level": "critical",
-		"max-age": "24",
+		"cache_file": os.path.join(cache_dir, "streams.json"),
+		"log_level": "critical",
+		"max_age": "24",
 	}
 
 	# The paths to search for the config file
@@ -74,19 +77,20 @@ def get_config(args=None, appname="twitchwatch"):
 
 	for path in cfg_paths:
 		settings_from_file = read_config_file(path)
-		logging.debug(settings_from_file)
+		log.debug(settings_from_file)
 
 		if settings_from_file != {}:
 			cfg.update(settings_from_file)
 			break
 
-	logging.info("Configuration file: {0}".format(cfg))
+	log.info("Configuration file: {0}".format(cfg))
 
 	# Override config file settings with command-line settings
 	for k, v in args.items():
 		if v is not None:
+			log.debug(f"Adding {k}:{v} to config")
 			cfg[k] = v
 
-	logging.info("Final configuration: {0}".format(cfg))
+	log.info("Final configuration: {0}".format(cfg))
 
 	return cfg

@@ -41,11 +41,10 @@ class ListenHandler(asyncore.dispatcher):
 			self.logger.info("Broadcasting")
 
 			for broadcaster in self.broadcasters:
-				for stream in streams:
-					try:
-						broadcaster.broadcast(stream)
-					except Exception as e:
-						self.logger.exception(e)
+				try:
+					broadcaster.broadcast(streams)
+				except Exception as e:
+					self.logger.exception(e)
 
 
 class ListenServer(asyncore.dispatcher):

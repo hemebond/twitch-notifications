@@ -174,18 +174,20 @@ class DbusBroadcaster(object):
 		self._interface = dbus.Interface(obj, _interface_name)
 
 	def send_notification(self, stream):
-		msg_summary = "New \"{0}\" stream".format(stream['game'])
+		self.logger.debug("send_notification()")
+		msg_summary = "New \"{0}\" stream".format(stream['game_name'])
 		msg_body = "https://www.twitch.tv/{0}".format(stream['user_name'])
 		self._interface.Notify("TwitchWatch", 0, "", msg_summary, msg_body, [], {}, -1)
 
-	def broadcast(self, stream):
+	def broadcast(self, streams):
 		self.logger.debug("broadcast()")
 
 		import dbus
 
-		try:
-			self.send_notification(stream)
-		except dbus.exceptions.DBusException:
-			self.logger.warn("DBus session invalid, reconnecting.")
-			self.get_interface()
-			self.send_notification(stream)
+		for stream in streams:
+			try:
+				self.send_notification(stream)
+			except dbus.exceptions.DBusException:
+				self.logger.warn("DBus session invalid, reconnecting.")
+				self.get_interface()
+				self.send_notification(stream)
