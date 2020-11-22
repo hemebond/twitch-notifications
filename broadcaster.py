@@ -6,7 +6,7 @@ import logging
 import os
 
 from server import ListenServer
-from broadcasters import IrcBroadcaster, DbusBroadcaster
+from broadcasters import IrcBroadcaster, DbusBroadcaster, DiscordWebhookBroadcaster
 import config
 
 
@@ -48,6 +48,12 @@ if __name__ == "__main__":
 				new_broadcaster = DbusBroadcaster()
 			except Exception as e:
 				logging.error("Could not create DbusBroadcaster")
+				logging.exception(e)
+		elif bc['type'] == "discord":
+			try:
+				new_broadcaster = DiscordWebhookBroadcaster(webhook_url=bc['webhook-url'])
+			except Exception as e:
+				logging.error("Could not create DiscordWebhookBroadcaster")
 				logging.exception(e)
 
 		if new_broadcaster:

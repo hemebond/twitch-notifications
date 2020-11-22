@@ -5,6 +5,7 @@ Watches Twitch and sends out notifications when someone begins streaming a parti
 
 * Python 3
 * xdg
+* twitchAPI
 
 ### Optional
 
@@ -20,12 +21,13 @@ Three locations will be checked for a `config.json` file:
 2. `config.json` in `$XDG_CONFIG_HOME/twitchwatch/`, e.g., `~/.config/twitchwatch/config.json`
 3. `config.json` in the program directory
 
-The configuration file is a JSON file and is used to define and configure the broadcasters and logging. You need to have a Client-ID to use the Twitch API. You can create one by following the [instructions on the Twitch blog](https://blog.twitch.tv/client-id-required-for-kraken-api-calls-afbb8e95f843).
+The configuration file is a JSON file and is used to define and configure the broadcasters and logging. You need to [register the application](https://dev.twitch.tv/console/apps) to get a Client ID and a Client Secret to use the Twitch API.
 
 Here is an example of a basic `config.json` file that will only send notifications to DBus:
-```
+```json
 {
 	"client-id": "xxxxxxxxxxxxxxxxxxxxxxx",
+	"client-secret": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",	                  
 	"broadcasters": [
 		{
 			"type": "dbus"

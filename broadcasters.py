@@ -145,15 +145,16 @@ class IrcBroadcaster(asyncore.dispatcher):
 			msg = msg.strip('\r\n')
 			self.logger.info(msg)
 
-	def broadcast(self, stream):
+	def broadcast(self, streams):
 		self.logger.debug("broadcast()")
 
 		# Only send the notification if the game list is empty
 		# or if the game is in the list
-		if self._games == [] or stream["game"] in self._games:
-			self._irc_send("{game} | {status} | {url}".format(game=stream['game'],
-			                                                  url="https://www.twitch.tv/%s" % stream['user_name'],
-			                                                  status=stream['title'].replace('\n', ' ')))
+		for stream in streams:
+			if self._games == [] or stream["game_name"] in self._games:
+				self._irc_send("{game} | {status} | {url}".format(game=stream['game_name'],
+				                                                  url="https://www.twitch.tv/%s" % stream['user_name'],
+				                                                  status=stream['title'].replace('\n', ' ')))
 
 
 class DbusBroadcaster(object):
@@ -191,3 +192,48 @@ class DbusBroadcaster(object):
 				self.logger.warn("DBus session invalid, reconnecting.")
 				self.get_interface()
 				self.send_notification(stream)
+
+
+
+class DiscordWebhookBroadcaster(object):
+	"""
+	{
+		"broadcasters": [
+			{
+				"type": "discord",
+				"webhook-url": "https://discord.com/api/webhooks/<webhook_id>/<webhook_token>"
+			}
+		]
+	}
+	"""
+	def __init__(self, webhook_url, **kwargs):
+		self.logger = logging.getLogger("DiscordBroadcaster")
+		self.logger.debug("__init__()")
+		self.webhook_url = webhook_url
+
+	def broadcast(self, streams):
+		self.logger.debug("broadcast()")
+		self.logger.info(streams)
+
+		import requests
+
+		url = self.webhook_url
+
+		for stream in streams:
+			payload = {
+				"embeds": [
+					{
+						"author": {
+							"name": stream['user_name']
+						},
+						"title": stream['game_name'],
+						"description": stream['title'],
+						"url": "https://www.twitch.tv/{0}".format(stream['user_name']),
+						"thumbnail": {
+							"url": stream['thumbnail_url'].format(width=32, height=32)
+						}
+					}
+				]
+			}
+
+			response = requests.post(url, json=payload)
