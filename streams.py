@@ -5,24 +5,18 @@ import argparse
 import socket
 import json
 import logging
-from datetime import datetime, timedelta
-from xdg import (XDG_CACHE_HOME,
-                 XDG_CONFIG_DIRS,
-                 XDG_CONFIG_HOME,
-                 XDG_DATA_DIRS,
-                 XDG_DATA_HOME,
-                 XDG_RUNTIME_DIR)
+from xdg import XDG_CACHE_HOME
 
 from client import get_current_streams
 import config
 
 
-
+LOG_FORMAT = "%(asctime)s — %(name)s — %(levelname)s — %(message)s"
 logging.basicConfig(
 	level=logging.DEBUG,
-	format="%(name)s: %(message)s"
+	format=LOG_FORMAT
 )
-log = logging.getLogger(__name__)
+log = logging.getLogger()
 
 
 

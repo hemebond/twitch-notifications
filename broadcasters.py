@@ -2,8 +2,8 @@ from datetime import datetime, timedelta
 import asyncore
 import logging
 import re
-
 from client import get_current_streams
+
 
 
 class IrcBroadcaster(asyncore.dispatcher):
@@ -13,8 +13,8 @@ class IrcBroadcaster(asyncore.dispatcher):
 		"""
 		import socket
 
-		self.logger = logging.getLogger("IrcBroadcaster (%s:%s)" % (network, port))
-		self.logger.debug("__init__()")
+		self.log = logging.getLogger("IrcBroadcaster")
+		self.log.debug("__init__()")
 
 		asyncore.dispatcher.__init__(self)
 
@@ -35,8 +35,8 @@ class IrcBroadcaster(asyncore.dispatcher):
 		try:
 			self.connect((network, port))
 		except Exception as e:
-			self.logger.error("Could not create IrcBroadcaster")
-			self.logger.error(e)
+			self.log.error("Could not create IrcBroadcaster")
+			self.log.error(e)
 			self.close()
 
 	def writable(self):
@@ -48,7 +48,7 @@ class IrcBroadcaster(asyncore.dispatcher):
 		self._buffer = self._buffer[sent:]
 
 	def handle_read(self):
-		self.logger.debug("handle_read()")
+		self.log.debug("handle_read()")
 
 		buffer = b''
 		while True:
@@ -62,23 +62,23 @@ class IrcBroadcaster(asyncore.dispatcher):
 			str_data = buffer.decode('UTF-8')
 
 			# Print out the data, commas prevents newline
-			self.logger.debug(str_data)
+			self.log.debug(str_data)
 
 			for line in str_data.split('\r\n'):
 				if line.find("End of /MOTD command") != -1:
-					self.logger.info("Responding to welcome")
+					self.log.info("Responding to welcome")
 					self._irc_join(self._irc_room)
 
 				elif line.find("MOTD File is missing") != -1:
-					self.logger.info("Missing MOTD")
+					self.log.info("Missing MOTD")
 					self._irc_join(self._irc_room)
 
 				elif line.startswith("PING "):
-					self.logger.info("Responding to PING")
+					self.log.info("Responding to PING")
 					self.send('PONG %s\r\n' % line.split()[1])
 
 				elif not self._irc_registered:
-					self.logger.info("Sending NICK details")
+					self.log.info("Sending NICK details")
 					self.send("NICK {0}\r\n".format(self._irc_nick))
 					self.send("USER {0} {0} {0} :Python IRC\r\n".format(self._irc_nick))
 					self._irc_registered = True
@@ -90,7 +90,7 @@ class IrcBroadcaster(asyncore.dispatcher):
 
 					if match:
 						user, message = match.groups()
-						self.logger.debug("Got message: %s" % message)
+						self.log.debug("Got message: %s" % message)
 
 						if message == 'quit':
 							self.close()
@@ -104,7 +104,7 @@ class IrcBroadcaster(asyncore.dispatcher):
 
 								for stream in current_streams:
 									if stream["channel"]["name"] in self._blacklist:
-										self.logger.info("Channel {0} is blacklisted".format(stream["channel"]["name"]))
+										self.log.info("Channel {0} is blacklisted".format(stream["channel"]["name"]))
 										current_streams.remove(stream)
 
 								# Construct a message to send to IRC
@@ -120,19 +120,19 @@ class IrcBroadcaster(asyncore.dispatcher):
 								self._irc_send(msg)
 							else:
 								# Not enough time has passed since the last request
-								self.logger.info("Not enough time since last command request")
+								self.log.info("Not enough time since last command request")
 
 	def send(self, msg):
-		self.logger.debug("send()")
+		self.log.debug("send()")
 		msg = bytes(msg, "UTF-8")
 		return super().send(msg)
 
 	def _irc_send(self, msg):
-		self.logger.debug("_irc_send()")
+		self.log.debug("_irc_send()")
 		self.send("PRIVMSG %s : %s\r\n" % (self._irc_room, msg))
 
 	def _irc_join(self, chan):
-		self.logger.debug("_irc_join()")
+		self.log.debug("_irc_join()")
 		self.send("JOIN %s\r\n" % chan)
 
 		msg = ''
@@ -143,10 +143,10 @@ class IrcBroadcaster(asyncore.dispatcher):
 				break
 
 			msg = msg.strip('\r\n')
-			self.logger.info(msg)
+			self.log.info(msg)
 
 	def broadcast(self, streams):
-		self.logger.debug("broadcast()")
+		self.log.debug("broadcast()")
 
 		# Only send the notification if the game list is empty
 		# or if the game is in the list
@@ -159,8 +159,8 @@ class IrcBroadcaster(asyncore.dispatcher):
 
 class DbusBroadcaster(object):
 	def __init__(self, **kwargs):
-		self.logger = logging.getLogger("DbusBroadcaster")
-		self.logger.debug("__init__()")
+		self.log = logging.getLogger("DbusBroadcaster")
+		self.log.debug("__init__()")
 
 		self.get_interface()
 
@@ -175,13 +175,13 @@ class DbusBroadcaster(object):
 		self._interface = dbus.Interface(obj, _interface_name)
 
 	def send_notification(self, stream):
-		self.logger.debug("send_notification()")
+		self.log.debug("send_notification()")
 		msg_summary = "New \"{0}\" stream".format(stream['game_name'])
 		msg_body = "https://www.twitch.tv/{0}".format(stream['user_name'])
 		self._interface.Notify("TwitchWatch", 0, "", msg_summary, msg_body, [], {}, -1)
 
 	def broadcast(self, streams):
-		self.logger.debug("broadcast()")
+		self.log.debug("broadcast()")
 
 		import dbus
 
@@ -207,13 +207,13 @@ class DiscordWebhookBroadcaster(object):
 	}
 	"""
 	def __init__(self, webhook_url, **kwargs):
-		self.logger = logging.getLogger("DiscordBroadcaster")
-		self.logger.debug("__init__()")
+		self.log = logging.getLogger("DiscordBroadcaster")
+		self.log.debug("__init__()")
 		self.webhook_url = webhook_url
 
 	def broadcast(self, streams):
-		self.logger.debug("broadcast()")
-		self.logger.info(streams)
+		self.log.debug("broadcast()")
+		self.log.info(streams)
 
 		import requests
 
