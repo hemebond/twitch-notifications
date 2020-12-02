@@ -1,7 +1,11 @@
 import logging
 import os
 import json
-from xdg import (XDG_CACHE_HOME, XDG_CONFIG_DIRS, XDG_CONFIG_HOME, XDG_DATA_DIRS, XDG_DATA_HOME, XDG_RUNTIME_DIR)
+from xdg import (
+	XDG_CACHE_HOME,
+	XDG_CONFIG_HOME,
+	XDG_RUNTIME_DIR
+)
 
 
 log = logging.getLogger(__name__)
@@ -63,7 +67,7 @@ def get_config(args=None, appname="twitchwatch"):
 		"socket": os.path.join(run_dir, "{0}.sock".format(appname)),
 		"cache_file": os.path.join(cache_dir, "streams.json"),
 		"log_level": "critical",
-		"max_age": "24",
+		"max_age": 8,
 	}
 
 	# The paths to search for the config file
